@@ -1,0 +1,68 @@
+# ============================================================
+# Google Ads Pipeline — Configuration Template
+# ============================================================
+# Copy this file to config.yaml and fill in your values.
+# NEVER commit config.yaml — it contains secrets.
+# ============================================================
+
+# ------------------------------------
+# Google Ads API credentials
+# How to get them:
+#   https://developers.google.com/google-ads/api/docs/oauth/cloud-project
+# ------------------------------------
+developer_token: "YOUR_DEVELOPER_TOKEN"
+client_id: "YOUR_CLIENT_ID.apps.googleusercontent.com"
+client_secret: "YOUR_CLIENT_SECRET"
+refresh_token: "YOUR_REFRESH_TOKEN"
+
+# MCC (manager account) customer ID — digits only, no dashes
+# If you don't have an MCC, use the same value as customer_id
+login_customer_id: "1234567890"
+
+# ------------------------------------
+# Account settings
+# ------------------------------------
+
+# The ad account you want to manage — digits only, no dashes
+customer_id: "9876543210"
+
+# Date your campaigns were launched (YYYY-MM-DD)
+# The optimizer will refuse to make changes before min_days_before_optimize
+launch_date: "2024-01-01"
+
+# ------------------------------------
+# Optimization thresholds
+# ------------------------------------
+
+# Maximum changes (pause/add negative) per single optimize.py run
+# Keeps changes gradual and reviewable
+max_changes_per_run: 5
+
+# Pause keyword if spend >= this AND conversions == 0 (in your currency)
+wasteful_spend_threshold: 50.0
+
+# Add negative keyword if search term has >= this many clicks, 0 conv, CTR <2%
+min_clicks_for_negative: 3
+
+# Don't optimize at all during first N days — let Smart Bidding learn
+min_days_before_optimize: 14
+
+# ------------------------------------
+# Bidding strategy upgrade
+# ------------------------------------
+
+# Switch a campaign to TARGET_CPA when it has >= this many conversions in 30 days
+min_conversions_for_cpa: 30
+
+# Target CPA value (in your currency)
+target_cpa: 45.0
+
+# Campaign to watch for TARGET_CPA readiness (optional, leave blank to skip check)
+target_cpa_campaign: ""
+
+# ------------------------------------
+# Telegram notifications (optional)
+# Leave blank to disable
+# ------------------------------------
+telegram_bot_token: ""
+telegram_chat_id: ""

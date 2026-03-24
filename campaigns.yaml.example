@@ -1,0 +1,16 @@
+# ============================================================
+# Google Ads Pipeline — Campaign List Template
+# ============================================================
+# Copy this file to campaigns.yaml and list your campaign names.
+# These are used by monitor.py and optimize.py to filter results
+# when your Google Ads account contains campaigns from multiple clients
+# or projects (e.g. an MCC sub-account).
+#
+# Leave the list empty to include ALL campaigns in the account.
+# ============================================================
+
+campaigns:
+  - "Campaign Name 1"
+  - "Campaign Name 2"
+  - "Campaign Name 3"
+  # Add more as needed
