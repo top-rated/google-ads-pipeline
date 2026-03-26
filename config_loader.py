@@ -50,8 +50,7 @@ def load_config() -> dict:
 def load_campaigns() -> set:
     """
     Returns the set of campaign names to manage.
-    If campaigns.yaml is missing or the list is empty, returns an empty set
-    which means 'include all campaigns in the account'.
+    If campaigns.yaml is missing or the list is empty, returns an empty set.
     """
     campaigns_path = BASE_DIR / "campaigns.yaml"
     if not campaigns_path.exists():
@@ -61,26 +60,38 @@ def load_campaigns() -> set:
     return set(names)
 
 
-def connect(config: dict):
-    """Return a GoogleAdsClient loaded from config dict."""
-    from google.ads.googleads.client import GoogleAdsClient
+def save_campaigns(names: set):
+    """
+    Saves the set of campaign names to campaigns.yaml.
+    """
+    campaigns_path = BASE_DIR / "campaigns.yaml"
+    data = {"campaigns": sorted(list(names))}
+    campaigns_path.write_text(yaml.dump(data, sort_keys=False))
 
-    credentials = {
-        "developer_token": config["developer_token"],
-        "client_id": config["client_id"],
-        "client_secret": config["client_secret"],
-        "refresh_token": config["refresh_token"],
-        "login_customer_id": str(config["login_customer_id"]),
-        "use_proto_plus": True,
-    }
+
     return GoogleAdsClient.load_from_dict(credentials)
+
+
+def get_all_campaign_names(client, customer_id: str) -> list:
+    """
+    Fetch all ENABLED campaign names from the Google Ads account.
+    Useful for 'exploring' what campaigns can be added to the pipeline.
+    """
+    ga_svc = client.get_service("GoogleAdsService")
+    query = """
+        SELECT campaign.name
+        FROM campaign
+        WHERE campaign.status = 'ENABLED'
+    """
+    response = ga_svc.search(customer_id=customer_id, query=query)
+    return [row.campaign.name for row in response]
 
 
 def filter_campaigns(rows, campaign_name_getter, allowed: set):
     """
     Filter a list of API result rows to only our campaigns.
-    If allowed is empty, all rows pass through.
+    In SaaS mode, if allowed is empty, NO rows pass through (Opt-In).
     """
     if not allowed:
-        return list(rows)
+        return []
     return [r for r in rows if campaign_name_getter(r) in allowed]

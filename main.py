@@ -75,6 +75,18 @@ async def health_check():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/account/campaigns")
+async def list_account_campaigns():
+    """List ALL active campaigns available in the Google Ads account."""
+    try:
+        from config_loader import connect, get_all_campaign_names
+        config = load_config()
+        client = connect(config)
+        all_names = get_all_campaign_names(client, str(config["customer_id"]))
+        return {"account_campaigns": all_names}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/monitor", response_model=MonitorReport)
 async def trigger_monitor(days: int = 1):
     """Trigger a manual monitoring run and return the report."""
@@ -94,11 +106,39 @@ async def trigger_optimize(dry_run: bool = True, days: int = 14):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/campaigns")
-async def list_campaigns():
-    """List campaigns currently being managed."""
+async def list_monitored_campaigns():
+    """List campaigns currently being MONITORED by the pipeline."""
     try:
         allowed = load_campaigns()
-        return {"managed_campaigns": list(allowed) if allowed else "ALL"}
+        return {"monitored_campaigns": list(allowed) if allowed else "NONE (Opt-In mode)"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/campaigns")
+async def add_campaign(name: str):
+    """Add a campaign to the management list."""
+    try:
+        from config_loader import save_campaigns
+        allowed = load_campaigns()
+        allowed.add(name)
+        save_campaigns(allowed)
+        return {"status": f"Campaign '{name}' added", "managed_campaigns": list(allowed)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/campaigns/{name}")
+async def remove_campaign(name: str):
+    """Remove a campaign from the management list."""
+    try:
+        from config_loader import save_campaigns
+        allowed = load_campaigns()
+        if name not in allowed:
+            raise HTTPException(status_code=404, detail=f"Campaign '{name}' not found in the list")
+        allowed.remove(name)
+        save_campaigns(allowed)
+        return {"status": f"Campaign '{name}' removed", "monitored_campaigns": list(allowed) if allowed else "NONE (Opt-In mode)"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

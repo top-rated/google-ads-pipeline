@@ -74,10 +74,17 @@ Once deployed, you can access the interactive Swagger documentation at:
 | Task | Endpoint | Mode |
 | :--- | :--- | :--- |
 | **Check Health** | `GET /health` | Check account connectivity |
-| **Run Monitor** | `POST /monitor?days=1` | Trigger a manual report |
+| **All Account Campaigns** | `GET /account/campaigns` | See what you can add |
+| **Monitored Campaigns** | `GET /campaigns` | List active pipeline campaigns |
+| **Run Monitor** | `POST /monitor?days=1` | Trigger a report |
 | **Run Optimizer** | `POST /optimize?dry_run=true` | Preview changes |
 | **Apply Changes** | `POST /optimize?dry_run=false` | Apply weekly optimizations |
-| **View Logs** | `GET /logs` | List recent run results |
+| **Add Campaign** | `POST /campaigns?name=XXX` | Start managing (Opt-In) |
+| **Remove Campaign**| `DELETE /campaigns/XXX` | Stop managing |
+| **View Logs** | `GET /logs` | List recent results |
+
+> [!IMPORTANT]
+> **Opt-In Mode**: By default, **NO** campaigns are monitored at the start. You must use the `POST /campaigns` endpoint to add the specific campaign names you want the AI to handle.
 
 Example: Trigger a manual monitor run from your terminal:
 ```bash
