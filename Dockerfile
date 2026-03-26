@@ -21,8 +21,8 @@ COPY . .
 # Create the logs directory
 RUN mkdir -p logs
 
-# Give execution rights on the entrypoint script
-RUN chmod +x entrypoint.sh
+# Expose the API port
+EXPOSE 8000
 
 # Set the entrypoint
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]

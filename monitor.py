@@ -154,41 +154,98 @@ def get_search_terms(client, customer_id: str, allowed_campaigns: set, days: int
     return results
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Google Ads daily monitor (read-only)")
-    parser.add_argument("--days", type=int, default=1, help="Number of days to look back (default: 1)")
-    args = parser.parse_args()
-
+def run_monitor_report(days: int = 1) -> dict:
+    """
+    Executes the monitor logic and returns a structured data dictionary.
+    Useful for both CLI and API.
+    """
     config = load_config()
     allowed = load_campaigns()
     customer_id = str(config["customer_id"])
     client = connect(config)
 
+    report = {
+        "timestamp": datetime.now().isoformat(),
+        "account_id": customer_id,
+        "period_days": days,
+        "ad_approvals": {},
+        "campaign_performance": {},
+        "top_keywords": [],
+        "top_search_terms": [],
+        "anomalies": []
+    }
+
+    # 1. Ad approval status
+    total, approved, issues = check_ad_approval(client, customer_id, allowed)
+    report["ad_approvals"] = {
+        "total": total,
+        "approved": approved,
+        "issues": issues
+    }
+
+    # 2. Campaign performance
+    perf, date_from, date_to = get_performance(client, customer_id, allowed, days)
+    report["campaign_performance"] = {
+        "date_from": date_from,
+        "date_to": date_to,
+        "data": perf
+    }
+
+    # 3. Top keywords (multi-day only)
+    if days >= 3:
+        report["top_keywords"] = get_keyword_performance(client, customer_id, allowed, days)
+
+    # 4. Search terms (multi-day only)
+    if days >= 3:
+        report["top_search_terms"] = get_search_terms(client, customer_id, allowed, days)
+
+    # 5. Anomaly detection
+    target_cpa = config.get("target_cpa", 0)
+    anomalies = []
+    for p in perf:
+        if p["impressions"] == 0 and p["status"] == "ENABLED":
+            anomalies.append(f"⚠ {p['name']}: 0 impressions but ENABLED")
+        if p["clicks"] > 10 and p["ctr"] < 0.01:
+            anomalies.append(f"⚠ {p['name']}: CTR below 1% ({p['ctr']:.1%})")
+        if target_cpa and p["cost_per_conv"] > target_cpa * 2 and p["conversions"] > 0:
+            anomalies.append(f"⚠ {p['name']}: CPA is {p['cost_per_conv']:.0f} (target: <{target_cpa})")
+    report["anomalies"] = anomalies
+
+    return report
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Google Ads daily monitor (read-only)")
+    parser.add_argument("--days", type=int, default=1, help="Number of days to look back (default: 1)")
+    args = parser.parse_args()
+
+    report = run_monitor_report(args.days)
+
     print("=" * 70)
-    print(f"GOOGLE ADS MONITOR — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    print(f"Account: {customer_id} | Period: last {args.days} day(s)")
+    print(f"GOOGLE ADS MONITOR — {report['timestamp']}")
+    print(f"Account: {report['account_id']} | Period: last {report['period_days']} day(s)")
     print("=" * 70)
 
     # 1. Ad approval status
     print("\n## AD APPROVAL STATUS")
-    total, approved, issues = check_ad_approval(client, customer_id, allowed)
-    print(f"  {approved}/{total} ads approved")
-    if issues:
+    approvals = report["ad_approvals"]
+    print(f"  {approvals['approved']}/{approvals['total']} ads approved")
+    if approvals["issues"]:
         print("  ISSUES:")
-        for i in issues:
+        for i in approvals["issues"]:
             print(f"    ✗ {i['campaign']} → {i['ad_group']} (ad {i['ad_id']}): {i['status']}")
             if i["topics"]:
                 print(f"      Topics: {', '.join(i['topics'])}")
 
     # 2. Campaign performance
     print("\n## CAMPAIGN PERFORMANCE")
-    perf, date_from, date_to = get_performance(client, customer_id, allowed, args.days)
-    if perf:
+    perf_data = report["campaign_performance"]["data"]
+    if perf_data:
         print(f"  {'Campaign':<35} {'Impr':>7} {'Clicks':>7} {'CTR':>7} {'Cost':>9} {'Conv':>6} {'CPC':>7} {'CPA':>9}")
         print("  " + "-" * 97)
         total_cost = 0
         total_conv = 0
-        for p in perf:
+        for p in perf_data:
             total_cost += p["cost"]
             total_conv += p["conversions"]
             print(
@@ -200,11 +257,10 @@ def main():
     else:
         print("  No data yet (campaigns may still be in review)")
 
-    # 3. Top keywords (multi-day only)
-    if args.days >= 3:
+    # 3. Top keywords
+    if report["top_keywords"]:
         print("\n## TOP KEYWORDS (by spend)")
-        kw_perf = get_keyword_performance(client, customer_id, allowed, args.days)
-        for k in kw_perf[:20]:
+        for k in report["top_keywords"][:20]:
             ctr = k["clicks"] / k["impressions"] * 100 if k["impressions"] > 0 else 0
             print(
                 f"  {k['campaign'][:25]:<25} {k['keyword']:<35}"
@@ -212,11 +268,10 @@ def main():
                 f"  {k['cost']:>.2f}  {k['conversions']:.0f} conv"
             )
 
-    # 4. Search terms (multi-day only)
-    if args.days >= 3:
+    # 4. Search terms
+    if report["top_search_terms"]:
         print("\n## TOP SEARCH TERMS (by spend)")
-        terms = get_search_terms(client, customer_id, allowed, args.days)
-        for t in terms[:20]:
+        for t in report["top_search_terms"][:20]:
             ctr = t["clicks"] / t["impressions"] * 100 if t["impressions"] > 0 else 0
             flag = " ⚠ NO CONV" if t["clicks"] >= 3 and t["conversions"] == 0 else ""
             print(
@@ -226,17 +281,8 @@ def main():
 
     # 5. Anomaly detection
     print("\n## ANOMALIES")
-    target_cpa = config.get("target_cpa", 0)
-    anomalies = []
-    for p in perf:
-        if p["impressions"] == 0 and p["status"] == "ENABLED":
-            anomalies.append(f"⚠ {p['name']}: 0 impressions but ENABLED")
-        if p["clicks"] > 10 and p["ctr"] < 0.01:
-            anomalies.append(f"⚠ {p['name']}: CTR below 1% ({p['ctr']:.1%})")
-        if target_cpa and p["cost_per_conv"] > target_cpa * 2 and p["conversions"] > 0:
-            anomalies.append(f"⚠ {p['name']}: CPA is {p['cost_per_conv']:.0f} (target: <{target_cpa})")
-    if anomalies:
-        for a in anomalies:
+    if report["anomalies"]:
+        for a in report["anomalies"]:
             print(f"  {a}")
     else:
         print("  None detected")

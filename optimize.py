@@ -166,12 +166,11 @@ def check_target_cpa_readiness(client, customer_id: str, config: dict):
     return f"{campaign_name}: no data in last 30 days"
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Google Ads weekly optimizer")
-    parser.add_argument("--dry-run", action="store_true", help="Preview changes without applying")
-    parser.add_argument("--days", type=int, default=14, help="Lookback period (default: 14)")
-    args = parser.parse_args()
-
+def run_optimization(dry_run: bool = True, lookback_days: int = 14) -> dict:
+    """
+    Executes the optimization logic and returns a structured dictionary of changes.
+    Useful for both CLI and API.
+    """
     config = load_config()
     allowed = load_campaigns()
     customer_id = str(config["customer_id"])
@@ -184,84 +183,100 @@ def main():
     launch_date = config.get("launch_date", "")
 
     days_live = days_since_launch(launch_date) if launch_date else 999
-
-    LOG_DIR.mkdir(exist_ok=True)
-    mode = "DRY RUN" if args.dry_run else "LIVE"
-
-    print("=" * 70)
-    print(f"GOOGLE ADS OPTIMIZER — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    print(f"Account: {customer_id} | Mode: {mode} | Days since launch: {days_live} | Lookback: {args.days}d")
-    print("=" * 70)
-
-    changes = []
+    
+    result = {
+        "timestamp": datetime.now().isoformat(),
+        "account_id": customer_id,
+        "mode": "DRY RUN" if dry_run else "LIVE",
+        "days_since_launch": days_live,
+        "changes": [],
+        "recommendations": [],
+        "errors": []
+    }
 
     # Guard: don't optimize too early
     if days_live < min_days:
-        print(f"\n⚠ Campaigns only {days_live} days old. Need {min_days}+ days for Smart Bidding to learn.")
-        print("  Skipping all changes. Run monitor.py instead.")
-        return
+        result["errors"].append(f"Campaigns only {days_live} days old. Need {min_days}+ days.")
+        return result
 
     # 1. Wasteful keywords
-    print(f"\n## WASTEFUL KEYWORDS (>{spend_threshold} spend, 0 conversions)")
-    wasteful = find_wasteful_keywords(client, customer_id, allowed, spend_threshold, args.days)
-    if wasteful:
-        for kw in wasteful:
-            if len(changes) >= max_changes:
-                print(f"  ... skipping rest (max {max_changes} changes per run)")
-                break
-            action = (
-                f"PAUSE keyword '{kw['keyword']}' ({kw['match']}) "
-                f"in {kw['campaign']}/{kw['ad_group']} — "
-                f"{kw['cost']:.2f} spent, {kw['clicks']} clicks, 0 conv"
-            )
-            print(f"  {'[DRY] ' if args.dry_run else ''}{action}")
-            pause_keyword(client, customer_id, kw["ag_id"], kw["crit_id"], args.dry_run)
-            changes.append({"action": "pause_keyword", "detail": action, "applied": not args.dry_run})
-    else:
-        print("  None found")
+    wasteful = find_wasteful_keywords(client, customer_id, allowed, spend_threshold, lookback_days)
+    for kw in wasteful:
+        if len(result["changes"]) >= max_changes:
+            break
+        action = (
+            f"PAUSE keyword '{kw['keyword']}' ({kw['match']}) "
+            f"in {kw['campaign']}/{kw['ad_group']} — "
+            f"{kw['cost']:.2f} spent, {kw['clicks']} clicks, 0 conv"
+        )
+        pause_keyword(client, customer_id, kw["ag_id"], kw["crit_id"], dry_run)
+        result["changes"].append({"action": "pause_keyword", "detail": action, "applied": not dry_run})
 
     # 2. Negative keyword candidates
-    print(f"\n## NEGATIVE KEYWORD CANDIDATES (>{min_clicks} clicks, 0 conv, CTR <2%)")
-    neg_candidates = find_negative_keyword_candidates(client, customer_id, allowed, min_clicks, args.days)
-    if neg_candidates:
-        for nc in neg_candidates:
-            if len(changes) >= max_changes:
-                print(f"  ... skipping rest (max {max_changes} changes per run)")
-                break
-            action = (
-                f"ADD negative '{nc['term']}' to {nc['campaign']} — "
-                f"{nc['clicks']} clicks, {nc['cost']:.2f}, CTR {nc['ctr']:.1%}"
-            )
-            print(f"  {'[DRY] ' if args.dry_run else ''}{action}")
-            add_negative_keyword(client, customer_id, nc["campaign_id"], nc["term"], args.dry_run)
-            changes.append({"action": "add_negative", "detail": action, "applied": not args.dry_run})
+    neg_candidates = find_negative_keyword_candidates(client, customer_id, allowed, min_clicks, lookback_days)
+    for nc in neg_candidates:
+        if len(result["changes"]) >= max_changes:
+            break
+        action = (
+            f"ADD negative '{nc['term']}' to {nc['campaign']} — "
+            f"{nc['clicks']} clicks, {nc['cost']:.2f}, CTR {nc['ctr']:.1%}"
+        )
+        add_negative_keyword(client, customer_id, nc["campaign_id"], nc["term"], dry_run)
+        result["changes"].append({"action": "add_negative", "detail": action, "applied": not dry_run})
+
+    # 3. TARGET_CPA readiness check
+    cpa_status = check_target_cpa_readiness(client, customer_id, config)
+    if cpa_status:
+        result["recommendations"].append(cpa_status)
+
+    # Log changes to file
+    LOG_DIR.mkdir(exist_ok=True)
+    log_file = LOG_DIR / f"optimize_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    log_data = {
+        **result,
+        "lookback_days": lookback_days
+    }
+    log_file.write_text(json.dumps(log_data, indent=2, ensure_ascii=False))
+    result["log_file"] = str(log_file)
+
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Google Ads weekly optimizer")
+    parser.add_argument("--dry-run", action="store_true", help="Preview changes without applying")
+    parser.add_argument("--days", type=int, default=14, help="Lookback period (default: 14)")
+    args = parser.parse_args()
+
+    result = run_optimization(args.dry_run, args.days)
+
+    print("=" * 70)
+    print(f"GOOGLE ADS OPTIMIZER — {result['timestamp']}")
+    print(f"Account: {result['account_id']} | Mode: {result['mode']} | Days since launch: {result['days_since_launch']}")
+    print("=" * 70)
+
+    if result["errors"]:
+        for err in result["errors"]:
+            print(f"\n⚠ {err}")
+        return
+
+    print(f"\n## CHANGES")
+    if result["changes"]:
+        for c in result["changes"]:
+            print(f"  {'[DRY] ' if result['mode'] == 'DRY RUN' else ''}{c['detail']}")
     else:
         print("  None found")
 
-    # 3. TARGET_CPA readiness check
-    print("\n## BIDDING STRATEGY CHECK")
-    cpa_status = check_target_cpa_readiness(client, customer_id, config)
-    if cpa_status:
-        print(f"  {cpa_status}")
-        if "READY" in cpa_status:
-            changes.append({"action": "recommendation", "detail": cpa_status})
+    print("\n## RECOMMENDATIONS")
+    if result["recommendations"]:
+        for r in result["recommendations"]:
+            print(f"  {r}")
     else:
-        print("  target_cpa_campaign not configured in config.yaml — skipping")
-
-    # Log changes
-    log_file = LOG_DIR / f"optimize_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    log_data = {
-        "timestamp": datetime.now().isoformat(),
-        "mode": mode,
-        "days_since_launch": days_live,
-        "lookback_days": args.days,
-        "changes": changes,
-    }
-    log_file.write_text(json.dumps(log_data, indent=2, ensure_ascii=False))
+        print("  None")
 
     print(f"\n## SUMMARY")
-    print(f"  Changes {'proposed' if args.dry_run else 'applied'}: {len(changes)}")
-    print(f"  Log: {log_file}")
+    print(f"  Changes {'proposed' if result['mode'] == 'DRY RUN' else 'applied'}: {len(result['changes'])}")
+    print(f"  Log: {result.get('log_file')}")
     print("=" * 70)
 
 

@@ -53,49 +53,52 @@ nano campaigns.yaml
 
 ## Step 5: Deploy with Docker Compose
 
-Build and start the container in detached mode:
+Build and start the container:
 
 ```bash
 docker compose up -d --build
 ```
 
-The pipeline is now running! It will:
-- Run `monitor.py` every 24 hours.
-- Run `optimize.py` every 7 days (as configured in `entrypoint.sh`).
-- Log everything to the `./logs` directory on your VPS.
+The pipeline is now running both the **REST API** and the **Automatic Scheduler**.
+
+## API Documentation & Usage
+
+The pipeline now exposes a professional REST API on port `8000`.
+
+### Interactive API Docs
+Once deployed, you can access the interactive Swagger documentation at:
+**`http://your-vps-ip:8000/docs`**
+
+### Common API Commands
+
+| Task | Endpoint | Mode |
+| :--- | :--- | :--- |
+| **Check Health** | `GET /health` | Check account connectivity |
+| **Run Monitor** | `POST /monitor?days=1` | Trigger a manual report |
+| **Run Optimizer** | `POST /optimize?dry_run=true` | Preview changes |
+| **Apply Changes** | `POST /optimize?dry_run=false` | Apply weekly optimizations |
+| **View Logs** | `GET /logs` | List recent run results |
+
+Example: Trigger a manual monitor run from your terminal:
+```bash
+curl -X POST "http://localhost:8000/monitor?days=7"
+```
 
 ## Useful Commands
 
 ### Check logs
 ```bash
-# View live output from the container
+# View live API output
 docker compose logs -f
-
-# View persistent logs on the host
-tail -f logs/monitor.log
-tail -f logs/optimize.log
 ```
 
-### Run a script manually inside the container
-```bash
-# Run a daily monitor manually
-docker compose exec google-ads-pipeline python3 monitor.py
-
-# Run a weekly optimizer manually (dry-run)
-docker compose exec google-ads-pipeline python3 optimize.py --dry-run
-```
-
-### Restart the pipeline
-```bash
-docker compose restart
-```
-
-### Stop the pipeline
-```bash
-docker compose down
-```
+### Automatic Scheduling
+The API handles scheduling internally:
+- **Daily Monitor**: Every day at 08:00.
+- **Weekly Optimization**: Every Monday at 09:00.
 
 ## Professional Maintenance Tips
+...
 
 1.  **Security**: Ensure your `.env` file is NOT committed to version control.
 2.  **Backup**: Periodically backup your `logs/` directory if you need historical data.
