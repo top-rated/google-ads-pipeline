@@ -4,17 +4,17 @@ Minimal Python scripts for managing Google Ads Search campaigns via the API.
 Useful when you run campaigns from an MCC or a shared account and need
 read-only monitoring plus conservative automated optimization.
 
-## Scripts
+## Professional Deployment (Recommended)
 
-| Script | What it does |
-|---|---|
-| `monitor.py` | Read-only daily report: ad approval, performance, top keywords, search terms, anomalies |
-| `optimize.py` | Weekly changes: pause wasteful keywords, add negative keywords, check TARGET_CPA readiness |
+For a stable, production-ready setup on a VPS, use Docker. This ensures all dependencies are correctly installed and scripts run on a reliable schedule.
 
-Both scripts are safe to run on a cron job. `optimize.py --dry-run` shows
-what would happen without making any changes.
+See the [VPS Deployment Guide](deploy_vps.md) for step-by-step instructions.
 
-## Setup
+### Quick Start (Docker)
+1. `cp .env.example .env` (fill in your keys)
+2. `docker compose up -d`
+
+## Local Setup
 
 ### 1. Install dependencies
 
@@ -23,6 +23,7 @@ pip install -r requirements.txt
 ```
 
 ### 2. Get Google Ads API credentials
+...
 
 You need:
 - A [Google Ads developer token](https://developers.google.com/google-ads/api/docs/get-started/dev-token)

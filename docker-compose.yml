@@ -1,0 +1,12 @@
+services:
+  google-ads-pipeline:
+    build: .
+    container_name: google-ads-pipeline
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./campaigns.yaml:/app/campaigns.yaml:ro
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1

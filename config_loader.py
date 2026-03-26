@@ -1,21 +1,50 @@
-"""
-Shared config loader for all pipeline scripts.
-Reads config.yaml and campaigns.yaml from the same directory as this file.
-"""
-
+import os
 from pathlib import Path
 import yaml
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).parent
 
+# Load .env file if it exists
+load_dotenv(BASE_DIR / ".env")
+
 
 def load_config() -> dict:
+    """
+    Loads configuration from environment variables or config.yaml.
+    Environment variables take precedence.
+    """
     config_path = BASE_DIR / "config.yaml"
-    if not config_path.exists():
-        raise FileNotFoundError(
-            "config.yaml not found. Copy config.yaml.example to config.yaml and fill in your values."
+    config = {}
+
+    # 1. Try loading from config.yaml if it exists
+    if config_path.exists():
+        config = yaml.safe_load(config_path.read_text()) or {}
+
+    # 2. Override with environment variables if present
+    env_mapping = {
+        "developer_token": "GOOGLE_ADS_DEVELOPER_TOKEN",
+        "client_id": "GOOGLE_ADS_CLIENT_ID",
+        "client_secret": "GOOGLE_ADS_CLIENT_SECRET",
+        "refresh_token": "GOOGLE_ADS_REFRESH_TOKEN",
+        "login_customer_id": "GOOGLE_ADS_LOGIN_CUSTOMER_ID",
+    }
+
+    for key, env_var in env_mapping.items():
+        val = os.getenv(env_var)
+        if val:
+            config[key] = val
+
+    # Verify required keys
+    required_keys = ["developer_token", "client_id", "client_secret", "refresh_token", "login_customer_id"]
+    missing = [k for k in required_keys if k not in config]
+    if missing:
+        raise ValueError(
+            f"Missing required configuration: {', '.join(missing)}. "
+            "Set them as environment variables or in config.yaml."
         )
-    return yaml.safe_load(config_path.read_text())
+
+    return config
 
 
 def load_campaigns() -> set:
