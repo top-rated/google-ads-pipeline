@@ -69,6 +69,18 @@ def save_campaigns(names: set):
     campaigns_path.write_text(yaml.dump(data, sort_keys=False))
 
 
+def connect(config: dict):
+    """Return a GoogleAdsClient loaded from config dict."""
+    from google.ads.googleads.client import GoogleAdsClient
+
+    credentials = {
+        "developer_token": config["developer_token"],
+        "client_id": config["client_id"],
+        "client_secret": config["client_secret"],
+        "refresh_token": config["refresh_token"],
+        "login_customer_id": str(config["login_customer_id"]),
+        "use_proto_plus": True,
+    }
     return GoogleAdsClient.load_from_dict(credentials)
 
 
