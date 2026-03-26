@@ -63,11 +63,11 @@ The pipeline is now running both the **REST API** and the **Automatic Scheduler*
 
 ## API Documentation & Usage
 
-The pipeline now exposes a professional REST API on port `8000`.
+The pipeline now exposes a professional REST API on port `3215`.
 
 ### Interactive API Docs
 Once deployed, you can access the interactive Swagger documentation at:
-**`http://your-vps-ip:8000/docs`**
+**`http://your-vps-ip:3215/docs`**
 
 ### Common API Commands
 
@@ -88,7 +88,7 @@ Once deployed, you can access the interactive Swagger documentation at:
 
 Example: Trigger a manual monitor run from your terminal:
 ```bash
-curl -X POST "http://localhost:8000/monitor?days=7"
+curl -X POST "http://localhost:3215/monitor?days=7"
 ```
 
 ## Useful Commands

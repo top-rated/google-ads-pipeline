@@ -22,7 +22,7 @@ COPY . .
 RUN mkdir -p logs
 
 # Expose the API port
-EXPOSE 8000
+EXPOSE 3215
 
 # Set the entrypoint
 ENTRYPOINT ["/bin/bash", "/app/entrypoint.sh"]

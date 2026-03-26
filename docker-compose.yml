@@ -7,7 +7,7 @@ services:
       - ./logs:/app/logs
       - ./campaigns.yaml:/app/campaigns.yaml:ro
     ports:
-      - "8000:8000"
+      - "3215:3215"
     env_file:
       - .env
     environment:
